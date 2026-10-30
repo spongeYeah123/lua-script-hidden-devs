@@ -1,0 +1,465 @@
+local ReciptHandler = {}
+
+
+-- services/api
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ServerStorage = game:GetService("ServerStorage")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local Datahandler = require("../Data/PlayerData") -- data
+local assets = ReplicatedStorage:WaitForChild("assets")
+local Settings = require(ReplicatedStorage.Config.Settings) -- gamepasses and other config
+--local RewardPasses = require("./GamePassesHandler")
+
+local BindableEvent = assets.remotes.Recipt -- bindable event
+local bindableFunction = assets.remotes.reciptfr -- unbindable function
+local GamePass = assets:WaitForChild("remotes").GamePass -- remote event
+local GamePassRf = assets:WaitForChild("remotes").Gamepassrf -- remote function 
+
+
+local GamePassesHandler = {}
+ReciptHandler.TargetPlayer = nil -- target player  by spectation hence the system works on spectated player from another module and client side
+
+-- Consumable products can be bought repeatedly (pay-per-use, e.g. Kill).
+-- The "already owns" checks and ownership recording are skipped for these.
+local CONSUMABLE_PRODUCTS = {
+	[Settings.Gamepasses.Kill] = true,
+	[Settings.Gamepasses.KickPlayer] = true,
+	[Settings.Gamepasses.Freeze] = true,
+	[Settings.Gamepasses.Blind] = true,
+	[Settings.Gamepasses.Jumpscare] = true,
+	[Settings.Gamepasses.OhNoYouFell] = true,
+	[Settings.Gamepasses.GoToEnd] = true,
+	[Settings.Gamepasses.Skip10Minutes] = true,
+	[Settings.Gamepasses.Skip20Minutes] = true,
+	[Settings.Gamepasses.SkipDailyReward] = true,
+	[Settings.Gamepasses.SkipAllDailyRewards] = true,
+	
+	[Settings.Gamepasses.Spin1] = true,
+	[Settings.Gamepasses.Spins10] = true,
+	[Settings.Gamepasses.Cash1K] = true,
+	[Settings.Gamepasses.Cash100] = true,
+	[Settings.Gamepasses.Cash10K] = true,
+	[Settings.Gamepasses.Cash100K] = true,
+}
+
+-- Helper to get a player's profile data safely
+local function getProfileData(player)
+	local profile = Datahandler.GetProfile(player)-- profile store
+	if not profile then return nil end
+	return profile.Data -- return the data in profile store
+end
+
+-- Give a tool to a player, if they don't already have it
+local function giveTool(player, toolName, folderName)
+	local folder = ServerStorage:FindFirstChild(folderName)-- check if folder exists
+	local tool = folder and folder:FindFirstChild(toolName) -- looks for the tool in folder
+	if not tool then
+		warn("Missing tool '" .. toolName .. "' in ServerStorage > " .. folderName)
+		return "fail"
+	end -- return fail if no tools 
+	
+	if player:FindFirstChild("StarterGear") and not player.StarterGear:FindFirstChild(toolName) then
+		tool:Clone().Parent = player.StarterGear
+	end
+	
+	if player:FindFirstChild("Backpack") and not player.Backpack:FindFirstChild(toolName) then
+		tool:Clone().Parent = player.Backpack 
+	end-- clone tool and give it in player gear and backpack
+	
+	
+	Datahandler.AddItem(player, toolName) -- add tool to player inventory
+	return "success"-- return success
+end
+
+--every other handlers return fail or success depends if gamepasse did have effects 
+GamePassesHandler[Settings.Gamepasses.LaserGun] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the laser gun gamepass")
+	
+	return giveTool(player, "LaserGun", "items"),  "No item exists by name lasergun"
+end
+
+GamePassesHandler[Settings.Gamepasses.InvincibleCloak] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the invincible cloak gamepass")
+	
+	return giveTool(player, "InvincibleCloak", "items"), "No item exists by name invinciblecloak"
+end
+
+GamePassesHandler[Settings.Gamepasses.GodlyPush] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the godly slap gamepass")
+	
+	return giveTool(player, "GodlyPush", "items"), "No item exists by name godlypush"
+end
+
+GamePassesHandler[Settings.Gamepasses.FlingTool] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the hd admin gamepass")
+	
+	return giveTool(player, "FlingTool", "items") , "No item exists by name flingtool"
+end
+
+GamePassesHandler[Settings.Gamepasses.VoidGlove] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the void glove gamepass")
+	
+	return giveTool(player, "VoidGlove", "items"), "No item exists by name voidglove"
+end
+
+GamePassesHandler[Settings.Gamepasses.RainbowGlove] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the rainbow glove gamepass")
+	
+	return giveTool(player, "RainbowGlove", "items"), "No item exists by name rainbowglove"
+end
+
+--[[GamePassesHandler[Settings.Gamepasses.HdAdmin] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the hd admin gamepass")
+
+	return "success", "Granted"
+[[end]]
+
+
+--pure cash gamepasses no need for fail returns data should exists by now
+GamePassesHandler[Settings.Gamepasses.Cash100] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	data.OtherData.Cash += 100
+	print(player.Name .. " has been granted 100 cash")
+	
+	return "success"
+end
+
+GamePassesHandler[Settings.Gamepasses.Cash1K] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.Cash += 1000
+		print(player.Name .. " has been granted 1K cash")
+	end
+	
+	return "success"
+end
+
+GamePassesHandler[Settings.Gamepasses.Cash10K] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.Cash += 10000
+		print(player.Name .. " has been granted 10K cash")
+	end
+	
+	return "success"
+end
+
+GamePassesHandler[Settings.Gamepasses.Cash100K] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.Cash += 100000
+		print(player.Name .. " has been granted 100K cash")
+	end
+	
+	return "success"
+end
+
+
+-- Spins gamepasses grant spins to the player only success
+GamePassesHandler[Settings.Gamepasses.Spin1] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.Spins = (data.OtherData.Spins or 0) + 1
+		print(player.Name .. " has been granted 1 spin")
+	end
+	
+	return "success"
+end
+
+GamePassesHandler[Settings.Gamepasses.Spins10] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.Spins = (data.OtherData.Spins or 0) + 10
+		print(player.Name .. " has been granted 10 spins")
+	end
+	
+	return "success"
+end
+
+-- Jump multiplier gamepasses set the player's jump multiplier and change it live
+GamePassesHandler[Settings.Gamepasses.Jump2x] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.JumpMultiplier = math.max(data.OtherData.JumpMultiplier or 1, 2)
+		print(player.Name .. " has been granted the 2x jump gamepass")
+	end
+	-- The client-side jump button toggles the multiplier on the humanoid,
+	-- so the server only records ownership here.
+	
+	
+	return "success"
+end	
+
+
+GamePassesHandler[Settings.Gamepasses.Jump4x] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.JumpMultiplier = math.max(data.OtherData.JumpMultiplier or 1, 4)
+		print(player.Name .. " has been granted the 4x jump gamepass")
+	end
+	-- The client-side jump button toggles the multiplier on the humanoid,
+	-- so the server only records ownership here.
+	
+	return "success", "Granted"
+end
+
+GamePassesHandler[Settings.Gamepasses.Jump8x] = function(receiptinfo: {any}, player: Player)
+	local data = getProfileData(player)
+	if data then
+		data.OtherData.JumpMultiplier = math.max(data.OtherData.JumpMultiplier or 1, 8)
+		print(player.Name .. " has been granted the 8x jump gamepass")
+	end
+	-- The client-side jump button toggles the multiplier on the humanoid,
+	-- so the server only records ownership here.
+	
+	return "success", "Granted"
+end
+
+
+-- Skip / utility gamepasses: ownership is recorded automatically by ProcessReceipt
+-- stored in profile.Data.OtherData.Gamepasses, so these handlers just confirm the grant.
+-- they just need to confirm if target had effects or no
+--- callback is invoked by the bindable function
+GamePassesHandler[Settings.Gamepasses.SkipAllDailyRewards] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the skip all daily rewards gamepass")
+	return bindableFunction:Invoke("SkillAll", player)
+end
+
+GamePassesHandler[Settings.Gamepasses.SkipDailyReward] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the skip daily reward gamepass")
+	
+	return bindableFunction:Invoke("Skip", player)
+end
+
+
+GamePassesHandler[Settings.Gamepasses.Skip20Minutes] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the skip 20 minutes gamepass")
+	
+	return bindableFunction:Invoke("Skip20", player)
+end
+
+GamePassesHandler[Settings.Gamepasses.Skip10Minutes] = function(receiptinfo: {any}, player: Player)
+	print(player.Name .. " has been granted the skip 10 minutes gamepass")
+	
+	return bindableFunction:Invoke("Skip10", player)
+end
+
+-- Oh no you fell: sends the target (or the buyer if no target) back to the spawn
+GamePassesHandler[Settings.Gamepasses.OhNoYouFell] = function(receiptinfo: {any}, player: Player, target: Player)
+	local victim = target or player
+	local char = victim.Character
+	if not char then return "fail", "Target has no character" end
+
+	local spawnPart = workspace:FindFirstChildWhichIsA("SpawnLocation", true)
+	if not spawnPart then return "fail", "No SpawnLocation found in Workspace" end
+
+	char:PivotTo(spawnPart.CFrame + Vector3.new(0, 5, 0))
+	print(victim.Name .. " has been sent back to the start")
+	return "success", "Sent back to start"
+end
+
+-- Go to end: teleports the buyer to the end of the tower
+GamePassesHandler[Settings.Gamepasses.GoToEnd] = function(receiptinfo: {any}, player: Player)
+	local char = player.Character
+	if not char then return "fail", "Player has no character" end
+
+	local tower = workspace:FindFirstChild("Tower")
+	local endPart = workspace:FindFirstChild("EndPart", true)
+		or (tower and tower:FindFirstChild("Wins"))
+	if not endPart then return "fail", "No EndPart or Tower.Wins found in Workspace" end
+
+	char:PivotTo(endPart.CFrame + Vector3.new(0, 5, 0))
+	print(player.Name .. " has been teleported to the end")
+	return "success", "Teleported to the end"
+end
+
+-- utility gamepasses
+GamePassesHandler[Settings.Gamepasses.Freeze] = function(receiptinfo: {any}, player: Player, target: Player)
+	if not target then  warn("Notarget") return "fail", "No Target Found" end -- no target return fail
+	local TargetHum = target.Character:FindFirstChildOfClass("Humanoid")
+	if not TargetHum then warn("No target hum") return "fail", "Target Dont exists"end -- somehow target doesnt have character or hun return fail
+	
+	local Config = Settings.GamePassesConfig.Freeze -- Config for gamepasses from another module
+	local FreezePart = Instance.new("Part", workspace:WaitForChild("Dump")) -- place for all temprory garbage parts
+	FreezePart.Name = "FreezePart"
+	FreezePart.Anchored = true -- part not defined by physics
+	FreezePart.CanCollide = false -- dont want character to be glitching 
+	FreezePart.Transparency = 0.4 -- transparency
+	local Size = Config.Size -- config size
+	FreezePart.Size = Vector3.new(Size.X, Size.Y, Size.Z) --config size
+	FreezePart.Color = Color3.fromRGB(85, 170, 255) -- blue
+	FreezePart.Material  = Enum.Material.Ice
+	FreezePart.MaterialVariant = "Ice"
+	
+	local function Freeze() -- checks for target returns  fail if no target then stun the player and create ice block around him
+		local CurrentSpeed = TargetHum.WalkSpeed  -- saves current speed
+		local CurrentJumpPower = TargetHum.JumpPower-- saves current jump
+		
+		TargetHum.WalkSpeed = 0 -- stun
+		TargetHum.JumpPower = 0 -- stun
+		FreezePart.CFrame = target.Character:GetPivot() -- set CFrame to character pivot so it become accuratly placed
+		task.delay(Config.FreezeTime, function() -- after cooldown reset player stats
+			if TargetHum and TargetHum.Parent then
+				TargetHum.WalkSpeed = CurrentSpeed
+				TargetHum.JumpPower = CurrentJumpPower
+			end
+			if FreezePart and FreezePart.Parent then
+				FreezePart:Destroy()
+			end
+		end)
+	end
+	
+	Freeze()-- call function
+	return "success", "Freeze"
+end
+
+GamePassesHandler[Settings.Gamepasses.Kill] = function(receiptinfo: {any}, player: Player, target: Player)
+	if not target then  warn("Notarget") return "fail", "No Target Found" end
+	
+	local Config = Settings.GamePassesConfig.Kill
+	local TargetHum = target.Character:FindFirstChildOfClass("Humanoid")
+	if not TargetHum then warn("No target hum") return "fail", "Target Dont exists" end
+	
+	local CurrentHealth = TargetHum.Health
+	
+	TargetHum:TakeDamage(CurrentHealth + 1)
+	return "success", "kill"
+end
+
+GamePassesHandler[Settings.Gamepasses.Jumpscare] = function(receiptinfo: {any}, player: Player, target: Player)
+	if not target then  warn("Notarget") return "fail", "No Target Found" end
+	local Config = Settings.GamePassesConfig.Jumpscare
+	
+	return GamePassRf:InvokeClient(target, "Jumpscare")
+end
+
+GamePassesHandler[Settings.Gamepasses.Blind] = function(receiptinfo: {any}, player: Player, target: Player)
+	if not target then  warn("Notarget") return "fail", "No Target Found" end
+	local Config = Settings.GamePassesConfig.Blind
+	
+	return GamePassRf:InvokeClient(target, "Blind")
+end
+
+-- kick is always gurantee to work
+GamePassesHandler[Settings.Gamepasses.KickPlayer] = function(receiptinfo: {any}, player: Player, target: Player)
+	if not target then  warn("Notarget") return "fail", "No Target Found" end
+	
+	target:Kick("You have been kicked by player, Our fault. rofl!")
+	return "success", "Kicked"
+end
+
+--wrapping it in pcall so it can warn if function failed
+local success, result = pcall(function()
+	MarketplaceService.ProcessReceipt = function(receiptInfo) -- this is where all the magic happens
+		local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
+		local gamepassId = receiptInfo.ProductId
+		print(receiptInfo.ProductId)
+
+		if not player or not player.Parent then -- if player left the game or somehow disappeared
+			warn("Player not found")
+			return Enum.ProductPurchaseDecision.NotProcessedYet, "player not found" -- stop proccess
+		end
+
+		local profile = Datahandler.GetProfile(player)
+		if not profile then
+			warn("Profile not found")
+			return Enum.ProductPurchaseDecision.NotProcessedYet, "profile not found" -- return data and if not data also stop proccess
+		end
+		
+		local isConsumable = CONSUMABLE_PRODUCTS[gamepassId] -- check if product is consumable
+		local data = profile.Data.OtherData.Gamepasses -- get gamepasses data from profile
+		
+		if not isConsumable then -- gamepasses
+			local success, haspass = pcall(function()
+				return MarketplaceService:UserOwnsGamePassAsync(player.UserId, gamepassId) -- check if player already has gamepass
+			end)
+
+			if not success then 
+				warn("Error checking gamepass ownership", haspass)
+				return Enum.ProductPurchaseDecision.NotProcessedYet, "error" -- return false not proccesing
+			end
+
+			if haspass or table.find(data, gamepassId) then -- check if player already has gamepass recorded in game profilestore or roblox backend
+				warn("Player already owns gamepass")
+				return Enum.ProductPurchaseDecision.NotProcessedYet, "already owns gamepass" -- return false not proccesing
+			end
+		end
+
+
+		local handler = GamePassesHandler[gamepassId]
+		if handler then
+			local success, result = pcall(function(...)  -- make sure handler are being excuted
+				local handlerresult, warning = handler(receiptInfo, player, ReciptHandler.TargetPlayer)
+				if handlerresult == "fail" then -- handler failed return false
+					warn("Error processing gamepass purchase", warning)
+					return false, warning
+				end
+				
+				return true-- success returns true
+			end) 
+			
+			if not success then  -- anything stopped handler for example typo or wrong excution
+				warn("Error processing gamepass purchase", result)
+				return Enum.ProductPurchaseDecision.NotProcessedYet, "error"
+			end
+		else 
+			warn("No handler for gamepass " .. gamepassId) -- no handlers for gamepass rarely if client side was done first
+			return Enum.ProductPurchaseDecision.NotProcessedYet, "error"
+		end
+		
+		if not isConsumable then
+			table.insert(data, gamepassId)-- saves gamepass to profile
+		end
+		print(player.Name .. " has been granted gamepass " .. gamepassId)
+		--Datahandler.SaveProfile(player, profile)
+		return Enum.ProductPurchaseDecision.PurchaseGranted, "success" -- pursche procceded
+	end
+end)
+
+if not success then
+	warn("Error setting up ProcessPurchase function: " .. tostring(result))
+end
+
+function ReciptHandler.ProcessPurchase( player: Player, Productdata: {any}, callback: () -> ())
+	local profile = Datahandler.GetProfile(player)
+	local price = Productdata.price
+	local name = Productdata.name
+
+	if not profile then
+		return false, "error"
+	end
+
+	local data = profile.Data.OtherData.Inventory
+	local success, hasitem = pcall(function()
+		return table.find(data, name)
+	end)
+
+	if hasitem then
+		return false, "already owns item"
+	end
+
+	if profile.Data.OtherData.Cash < price then
+		return false, "not enough cash"
+	end
+
+	profile.Data.OtherData.Cash -= price
+	table.insert(profile.Data.OtherData.Inventory, name)
+	print(player.Name .. " has been granted item " .. name)
+
+	local success, result = pcall(callback)
+	if not success then
+		return false, result
+	end
+
+	print("purchase success")
+	return true, "success"
+end
+
+GamePass.OnServerEvent:Connect(function(Buyer, target )
+	ReciptHandler.TargetPlayer = target.Player
+end)
+
+
+return ReciptHandler
